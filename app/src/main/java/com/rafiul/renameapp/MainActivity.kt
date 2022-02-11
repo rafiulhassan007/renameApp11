@@ -25,7 +25,7 @@ import java.lang.Exception
 
 
 class MainActivity : AppCompatActivity() {
-    //added
+
     private val SELECT_PICTURES = -9888
     private val list: MutableList<Uri> = mutableListOf()
     var extUri = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -49,10 +49,53 @@ class MainActivity : AppCompatActivity() {
                 requestPermission()
             }
         })
+        btn2.setOnClickListener(View.OnClickListener {
+            if (list.size < 1)
+                Toast.makeText(this@MainActivity, "Select Multiple Files", Toast.LENGTH_SHORT)
+                    .show()
+            renameOperation()
+//            renameOperation2()
+        })
 
+        intentSenderLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+            if(it.resultCode == RESULT_OK) {
+                Toast.makeText(this@MainActivity, "Photo renamed successfully", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@MainActivity, "Photo couldn't be rename", Toast.LENGTH_SHORT).show()
+            }
+        }
 
     }
 
+    private fun renameOperation2() {
+//        val contentUri: Uri? = when (split[0]) {
+//            "image" -> {
+//                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+//            }
+//            "video" -> {
+//                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+//            }
+//            "audio" -> {
+//                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+//            }
+//            "document" -> {
+//                MediaStore.Files.getContentUri("external")
+//            }
+//            else -> null
+//        }
+        var c = 0
+        for (item in list) {
+            c += 1
+            val currentFile = File(item.path)
+            if (currentFile.exists()) {
+                val newFile =
+                    File(currentFile.parentFile, "the_rafiul${c}." + currentFile.extension)
+//                val fromUri = Uri.withAppendedPath(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,item.id)
+            }
+            Log.d("no permission===== ", "onCreate: ${item}")
+
+        }
+    }
 
     private fun requestPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -97,7 +140,94 @@ class MainActivity : AppCompatActivity() {
         return x
     }
 
-   
+    fun getIdFromDisplayName(displayName: String): Long? {
+        val projection: Array<String>
+        projection = arrayOf(MediaStore.Files.FileColumns._ID)
+        val cursor = contentResolver.query(
+            extUri, projection,
+            MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ?", arrayOf(displayName), null
+        )!!
+        cursor.moveToFirst()
+        if (cursor.count > 0) {
+            val columnIndex = cursor.getColumnIndex(projection[0])
+            val fileId = cursor.getLong(columnIndex)
+            cursor.close()
+            return fileId
+        }
+        return null
+    }
+
+
+    private fun renameOperation() {
+        var c = 0
+        var fu: Uri
+        for (item in list) {
+            c += 1
+            item.let { fileUri ->
+                fu = fileUri
+                contentResolver.query(fileUri, null, null, null, null)
+            }?.use { returnCursor ->
+                val nameIndex =
+                    returnCursor!!.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val sizeIndex = returnCursor!!.getColumnIndex(OpenableColumns.SIZE)
+
+                returnCursor.moveToFirst()
+                var id: Long = getIdFromDisplayName(returnCursor.getString(nameIndex))!!
+//                var id: Long =  returnCursor.getLong(returnCursor.getColumnIndexOrThrow(BaseColumns._ID))
+                val fromUri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), id)
+                ContentValues().also {
+                    try {
+
+                        it.put(MediaStore.Files.FileColumns.IS_PENDING, 1)
+                        contentResolver.update(fromUri, it, null, null)
+                        it.clear()
+                        //updating file details
+                        it.put(MediaStore.Files.FileColumns.DISPLAY_NAME, "test1${c}")
+                        it.put(MediaStore.Files.FileColumns.IS_PENDING, 0)
+                        contentResolver.update(fromUri, it, null, null)
+                    }
+                    catch (e: SecurityException){
+                        Log.d("err", "err ===========================t: ${e} ")
+                        val intentSender = when{
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->{
+                                MediaStore.createWriteRequest(contentResolver, listOf(fromUri))
+                            }else -> null
+                        }
+
+                        intentSender?.let { sender ->
+                            intentSenderLauncher.launch(
+                                IntentSenderRequest.Builder(sender).build()
+                            )
+                        }
+                    }
+                }
+
+//                var mUri = ContentUris.withAppendedId(fu, id)
+//                var contentValues = ContentValues()
+////                contentValues.put(MediaStore.Files.FileColumns.IS_PENDING, 1)
+//                contentValues.put(
+//                    MediaStore.Files.FileColumns.DISPLAY_NAME,
+//                    "xx${returnCursor.getString(nameIndex)}"
+//                )
+//                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+//                    contentResolver.update(mUri, contentValues, null);
+//                }
+
+                Log.d("TAG", "path ===========================t: $fromUri ")
+                Log.d(
+                    "TAG", "nameIndex ===========================t: ${
+                        returnCursor.getString(nameIndex)
+                    } "
+                )
+                Log.d(
+                    "TAG", "sizeIndex ===========================t: ${
+                        returnCursor.getLong(sizeIndex)
+                    } "
+                )
+            }
+        }
+    }
+
     private fun choose() {
         val intent = Intent(Intent.ACTION_GET_CONTENT)
         intent.type =
@@ -158,6 +288,15 @@ class MainActivity : AppCompatActivity() {
 
         }
 
+    //it is also working
+    fun Uri.getName(context: Context): String {
+        val returnCursor = context.contentResolver.query(this, null, null, null, null)
+        val nameIndex = returnCursor!!.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        returnCursor!!.moveToFirst()
+        val fileName = returnCursor.getString(nameIndex)
+        returnCursor!!.close()
+        return fileName
+    }
 
     //============ deprecated ============
 //    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
